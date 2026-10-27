@@ -1,0 +1,92 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号（如 v16.0.0）。留空则只构建、不发布。'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Release (.NET Framework 4.8)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        run: >
+          msbuild War3Trainer.sln
+          /m
+          /p:Configuration=Release
+          /p:Platform="Any CPU"
+          /p:DebugType=None
+          /p:DebugSymbols=false
+          /verbosity:minimal
+
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          $version = ''
+          if ('${{ github.ref_type }}' -eq 'tag') {
+            $version = '${{ github.ref_name }}'
+          } elseif ('${{ inputs.version }}' -ne '') {
+            $version = '${{ inputs.version }}'
+          } else {
+            $version = 'dev-${{ github.run_number }}'
+          }
+          $zip = "War3Trainer-$version.zip"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "zip=$zip"         | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "version = $version"
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $stage = 'dist/War3Trainer'
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
+          Copy-Item 'War3Trainer/bin/Release/War3Trainer.exe' $stage
+          if (Test-Path 'War3Trainer/bin/Release/War3Trainer.exe.config') {
+            Copy-Item 'War3Trainer/bin/Release/War3Trainer.exe.config' $stage
+          }
+          Copy-Item 'README.md','LICENSE',"What's new.txt",'手册.txt' $stage
+
+          Compress-Archive -Path "$stage/*" -DestinationPath '${{ steps.ver.outputs.zip }}' -Force
+          Get-ChildItem '${{ steps.ver.outputs.zip }}' | Select-Object Name, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.version }}
+          path: ${{ steps.ver.outputs.zip }}
+          if-no-files-found: error
+
+      - name: Publish release
+        if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.version != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
+          files: ${{ steps.ver.outputs.zip }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

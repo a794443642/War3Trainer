@@ -9,6 +9,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)
 ![Warcraft III](https://img.shields.io/badge/Warcraft%20III-1.20e%20~%201.28f-B22222)
 ![License](https://img.shields.io/badge/License-MIT-green)
+[![Build & Release](https://github.com/a794443642/War3Trainer/actions/workflows/build.yml/badge.svg)](https://github.com/a794443642/War3Trainer/actions/workflows/build.yml)
 
 <img src="Screenshot.png" width="760" alt="内存搜索页">
 
@@ -156,7 +157,9 @@ War3Trainer.exe [--tab=0|1|2] [--book=<收藏文件路径>]
 3. **局域网联机**：想让朋友一起联机打 RPG 地图，**每台机器都要做完全相同的修改**，
    否则数据不同步会立刻掉线。
 
-## 构建
+## 构建与发布
+
+### 本地构建
 
 用 Visual Studio 2019/2022 打开 `War3Trainer.sln`（目标框架 `.NET Framework 4.8`），
 配置选 `Release` 构建即可：
@@ -166,6 +169,31 @@ War3Trainer/bin/Release/War3Trainer.exe
 ```
 
 编译需要「.NET Framework 4.8 目标包 / 开发工具」，`bin`、`obj` 已在 `.gitignore` 中排除。
+
+### 自动构建（GitHub Actions）
+
+`.github/workflows/build.yml` 在三种情况下运行：
+
+| 触发 | 动作 |
+| --- | --- |
+| push 到 `main` / 提交 PR | 只构建并上传 Artifacts，用来发现编译错误 |
+| push `v*` 标签 | 构建 + 打包 + **创建 Release** |
+| Actions 页手动 `Run workflow` | 填了版本号就发布，留空只构建 |
+
+发布流程：
+
+```bash
+git tag v16.0.0
+git push origin v16.0.0
+```
+
+几秒后 Actions 会生成 `War3Trainer-v16.0.0.zip`（内含
+`War3Trainer.exe`、`.exe.config`、`README.md`、`手册.txt`、`What's new.txt`、`LICENSE`），
+并在 <https://github.com/a794443642/War3Trainer/releases> 创建对应 Release。
+
+也可以在 GitHub 网页 **Actions → Build & Release → Run workflow**，
+在 `version` 里填 `v16.0.0` 手动发布（会自动在当前 `main` 上打标签）。
+
 
 ## 项目结构
 
